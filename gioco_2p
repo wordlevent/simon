@@ -1,0 +1,197 @@
+from time import sleep, clock, time
+import RPi.GPIO as GPIO
+import random
+import os
+from contextlib import ExitStack, contextmanager
+from timeit import default_timer
+
+path ="/home/pi/GIOCO/log2p.txt"
+
+
+#Open a file
+fo = open(path,"w")
+fo.write("------------ START --------------\n")
+fo.write(time.ctime()+"\n")
+lista =[]
+livello = sys.argv[1]
+ids = sys.argv[2]
+lista.append(livello)
+
+GPIO.cleanup()
+time.sleep(.1)
+GPIO.setmode(GPIO.BCM)
+GPIO.setwarnings(False)
+
+punti = 0
+punteggio = 0
+
+
+start_mini = 0
+start = time.time()
+
+
+seconds_mini = 0
+seconds = 0
+
+END = 45
+
+def end_time():
+end = time.time()
+temp = end -start
+hours = temp//3600
+temp = temp - 3600*hours
+minutes = temp//60
+seconds = temp - 60*minutes
+        if int(seconds) >= END:
+        print(punteggio)
+        #chiudo il log
+        fo.write("fn(end_minitime) punteggio =>" +str(punteggio) + " \n")
+        fo.write(time.ctime()+" FINE GIOCO \n\n")
+        fo.close()
+        GPIO.cleanup()
+        time.sleep(.5)
+        #print(seconds)
+        sys.exit()
+
+
+
+
+
+
+def start(): #will run when the program starts
+        light("SX")
+        sleep(.05)
+        light("DX")
+        sleep(.05)
+        allOff()
+        sleep(.05)
+
+
+def lost(): #will run when the user loses
+        light("SX")
+        sleep(.05)
+        light("DX")
+        sleep(.05)
+        allOff()
+        sleep(.05)
+
+
+def light(color):       #function which takes a string: R, Y or G and fires the corresponding GPIO pin and sound file
+        GPIO.setup(4, GPIO.OUT) #SX
+        GPIO.setup(17, GPIO.OUT) #DX
+        #GPIO.setup(18, GPIO.OUT) #green
+        if color == "SX":
+                GPIO.output(4, GPIO.HIGH)
+                os.system('aplay 440.wav')
+        if color == "DX":
+                GPIO.output(17, GPIO.HIGH)
+                os.system('aplay 660.wav')
+        
+
+                
+def allOff():           #turns all GPIO pins to low
+        GPIO.setup(4, GPIO.OUT) #SX
+        GPIO.setup(17, GPIO.OUT) #DX
+        #GPIO.setup(18, GPIO.OUT) #green
+        GPIO.output(4, False)
+        GPIO.output(17,False)
+        #GPIO.output(18, GPIO.LOW)
+        sleep(.5)
+
+
+def chosen():           #this function will switch the GPIOs to input mode and return which button is pressed
+        condition=True
+        GPIO.setup(5,GPIO.IN, pull_up_down=GPIO.PUD_DOWN) #SX
+        GPIO.setup(6,GPIO.IN,pull_up_down=GPIO.PUD_DOWN) #DX
+        while (condition):
+                red_prev_input_value=False
+                red_input_value=GPIO.input(5)
+                yellow_prev_input_value=False
+                yellow_input_value=GPIO.input(6)
+                if ((not red_prev_input_value) and red_input_value):
+                os.system('aplay 440.wav')
+                return "SX"
+                red_prev_input_value=red_input_value
+                sleep(0.1)
+                condition=False
+                if ((not yellow_prev_input_value) and yellow_input_value):
+                os.system('aplay 660.wav')
+                return "DX"
+                yellow_prev_input_value=yellow_input_value
+                sleep(0.1)
+                condition=False
+                
+def showScore(r):   #INGUARDABILE this function tells the user their score by lighting R for ones, Y for tens, and G for hundreds
+        ones = r%10
+        tens = (r%100 - r%10)/10
+        hundreds = (r - r%100)/100
+        
+        for x in range(0, hundreds):
+                light("SX")
+                sleep(.1)
+                allOff()
+                sleep(.1)
+                
+        for x in range(0, tens):
+                light("DX")
+                sleep(.1)
+                allOff()
+                sleep(.1)
+        
+        for x in range(0, ones):
+                light("R")
+                sleep(.1)
+                allOff()
+                sleep(.1)
+
+########THE GAME#############
+
+playing = True
+round = 0
+sequence = [None]*100
+start()
+
+while playing: #this loop is one round of play
+        sequence[round] = random.choice(["SX","DX"])
+                
+        for x in range(0, (round+1)):
+                light(sequence[x])
+                #BEEP?
+                sleep(.3)
+                allOff()
+                sleep(.3)
+                
+        for x in range(0,100):              #the sequence is printed to a command line...don't look at your monitor if you want to play for real!
+                if (sequence[x] != None):
+                        fo.write("fn(pressed): num "+str(sequence[x])+"\t punti:\n")            
+                        print(sequence[x])          
+                                
+        sleep(.2)
+        
+        i = 0
+        while (i < (round+1)):   #this loop checks user's input sequence and will continue of correct or end if incorrect
+                userChoice = chosen()
+                print("user: "+userChoice)
+                fo.write("scelta utente: "+str(userChoice)+"\t\n")            
+                
+                if ((userChoice != sequence[i]) and (userChoice != None)):
+                        print("WRONG")
+                        fo.write("scelta utente: SBAGLIATO\t\n")            
+                        playing = False
+                        i=round+1
+                else:
+                        fo.write("scelta utente: CORRETTO\t\n")            
+                        sleep(.4)
+                        i += 1
+
+                        
+        sleep(1)
+        round += 1
+        
+sleep(.5)
+lost()
+#showScore(round)
+
+allOff()
+fo.close()
+GPIO.cleanup()
